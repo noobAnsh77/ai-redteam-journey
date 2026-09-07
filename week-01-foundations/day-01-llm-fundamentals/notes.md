@@ -15,6 +15,28 @@ How LLMs actually process text under the hood — tokens, context windows, tempe
 
 **Context compaction** — when a conversation nears the context window limit, instead of hard-cutting old messages, the app summarizes the older part into a condensed version to free up space. (Literally happening in the Claude Code tool I'm using for this project.)
 
+## Questions I asked today (kept in my own words, for the record)
+
+Keeping the actual questions, not just the polished answers — the confusion itself is part of the learning record.
+
+**Q: "1 token = 0.75 english word here so 20 token so hardly i can send and received 15 english word like i can chat only 15 word with ai like claude, chatgpt"**
+A: The math (20 × 0.75 ≈ 15) was right, but the framing needed a fix — Claude.ai/ChatGPT's website are subscription-based with usage limits, not literal "buy N tokens per chat." Pay-per-token is how the *API* works instead, and there, it's not "15 words I get to send" — it's input + output tokens *combined* against a shared budget/context window.
+
+**Q: "suppose in claude for 5hrs i have 30 token ok? so means my input your input will be under this but i have doubt suppose if i type hey how are you and you replied fine will still this will be count?"**
+A: Yes — both sides count. Your message and the AI's reply both get counted toward the usage/token budget. Neither side is free.
+
+**Q: "oh my god means if i type hi how are you you replied good what about you then i ask 2+2 you means in what is 2+2 my all previous message will go to to you?"**
+A: Yes, exactly. Every new message resends the *entire* conversation history (system prompt + all prior turns) along with the new message — the model has no memory between calls, so the app replays the full transcript every single time, even the irrelevant small-talk from earlier turns.
+
+**Q: "what about when you thinking cost of thinking? and what is compact"**
+A: Reasoning models generate an internal "thinking" trace before the final answer, and that trace is made of tokens too — billed even when hidden from view. "Compact" = context compaction: when a conversation nears the context window limit, older messages get summarized into a condensed form instead of being hard-dropped, to free up space.
+
+**Q: "what is cost of thinking you just mention 1 token = 0.75 english word then?"**
+A: Same conversion, just applied to text you don't see — the hidden reasoning trace is regular text (words → tokens) like anything else. Example: a 3,000-token hidden reasoning trace behind a 50-token visible answer means the real cost is ~60x what the visible reply alone would suggest.
+
+**Q: "you mention 1 token = 0.75 english word ok? so 'how are you' = 3 word ok, what if i type 'howareyou' = so ai will think 1 word? so bill will be less"**
+A: Wrong direction — tokenizers don't count words, they match against common chunks learned from training data. `"how are you"` is common and tokenizes efficiently (~1 token/word). `"howareyou"` is a rare string with no clean vocabulary match, so it often gets split into *more*, smaller pieces — same or higher token count, not lower. (Separately, note: removing spaces/leetspeak *can* still help bypass a keyword filter — that's a different goal than saving cost, covered below.)
+
 ## Things I got wrong today (kept honest on purpose)
 
 1. **Thought "buy 20 tokens = can chat 15 words."** The math (20 × 0.75 ≈ 15) was actually right, but the framing was off — consumer apps like Claude.ai/ChatGPT are subscription-based with usage limits, not literal pay-per-token; that model is how the *API* works, and there, input + output tokens are billed together, not "15 words I get to send."
