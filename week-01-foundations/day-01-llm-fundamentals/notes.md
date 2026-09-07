@@ -11,6 +11,12 @@ How LLMs actually process text under the hood — tokens, context windows, tempe
 
 **Temperature / top-p / top-k** — control randomness in next-token selection. Low temperature = deterministic, more reproducible; high temperature = more random, harder to reliably reproduce a finding across runs. Top-p and top-k both restrict the model to sampling from a smaller set of likely next tokens (nucleus sampling vs. fixed top-N). Practical takeaway: when I find something that works, I should note what temperature the app was running at — "works consistently at low temp" is a stronger finding than "worked once."
 
+**The full sampling pipeline, in order:** (1) developer sets top-k and/or top-p → (2) model builds an *invisible* shortlist of candidate next-words from that → (3) temperature decides how randomly to pick one word from that shortlist → (4) exactly one final word is returned. This repeats word by word for the whole response. The shortlist itself is never shown to the user in normal chat — only visible via developer tools that expose raw token probabilities (e.g. `logprobs`).
+
+- **Top-k = fixed-size shortlist.** Top-k=3 always keeps exactly the top 3 most likely words, no matter how confident or unsure the model is, and throws away everything else.
+- **Top-p = flexible-size shortlist.** Top-p=0.8 keeps adding words (best first) until their combined probability crosses 80%, however many words that takes — could be 1 word (if the model is very confident) or a dozen (if it's unsure).
+- **When both are set together**, whichever cutoff is reached first/is stricter at that moment wins. E.g. top-k=3 + top-p=0.7: if the top 2 candidates alone already add up to 70%+, top-p finishes first and the shortlist is just those 2 — top-k's allowance for a 3rd never gets used.
+
 **Cost of "thinking"** — reasoning models (extended thinking / o-series style) generate an internal reasoning trace before the final answer. That trace is made of tokens too, using the same word-to-token math, and it's billed even when hidden from the UI. Example: a 3,000-token hidden reasoning trace behind a 50-token visible answer means the real cost is 60x what you'd guess from the visible reply alone.
 
 **Context compaction** — when a conversation nears the context window limit, instead of hard-cutting old messages, the app summarizes the older part into a condensed version to free up space. (Literally happening in the Claude Code tool I'm using for this project.)
@@ -59,6 +65,21 @@ A: Three layers: (1) the model provider sets a default if nothing else is specif
 
 **Q: "does temp differ mean the answer will be wrong? or will the answer stay correct, just explained differently?"**
 A: Depends on the type of question. For open-ended/subjective prompts (like the weather completion), different temperature gives different *valid* phrasing — not wrong, just varied. For factual/logical questions with exactly one correct answer, higher temperature genuinely increases the risk of an actually wrong answer, not just different wording — because generation is token-by-token and each token depends on the ones before it, so an early low-probability pick can snowball into a fully incorrect result. Example: "17 × 24" (=408) might reliably give 408 at temp 0, but occasionally give a wrong number like 398 at higher temp. This maps to a real, named risk — "overreliance"/hallucination in the OWASP LLM Top 10 — and matters directly for testing agents that make precise or security-relevant decisions.
+
+**Q: "top-p / top-k — explain this too" → "didn't get it, explain again in simple way with example"**
+A: Simplest framing: before picking its next word, the model makes an internal shortlist of candidate words. Top-k and top-p are two different ways to decide how big that shortlist is; temperature then decides how randomly to pick one word from it.
+
+**Q: "so top-k means if developer set top-k as 2, so if I ask what is my fav food, they will find the thing and then reply back only 2"**
+A: Correction — top-k does NOT mean you get 2 answers back. You always get exactly ONE final reply. The "2" only limits the *invisible internal* pool the model chooses from before producing that single answer — e.g. shortlist = `[pizza, pasta]` internally, but you only ever see one final word like `"pizza"`. The shortlist is never shown in normal chat.
+
+**Q: "got it about top-k part, so its mean as per dev set agent will pick those then as per temperature its reply"**
+A: Confirmed correct — that's the exact pipeline: developer sets top-k/top-p → model builds shortlist → temperature picks final word from it → one reply returned.
+
+**Q: "what about top-p" → "p still not covered, explain with example"**
+A: Same pipeline as top-k, different method of building the shortlist. Walked through a full numeric example (food: pizza 50%, pasta 25%, burger 15%, sushi 7%, other 3%): top-p=0.8 adds pizza (50%) then pasta (75%) then burger (90%) — crosses 80%, stop, shortlist = 3 words. Changing top-p changes shortlist size: top-p=0.5 → shortlist is just `[pizza]` (already at 50% alone); top-p=0.99 → shortlist balloons to include even the rare long-tail words. Low top-p = tight net, forces the obvious answer; high top-p = wide net, lets rare/weird tokens into play for temperature to gamble on.
+
+**Q: "so if user ask what is my fav food, developer set top-k=3 and top-p=70, so if 2 guesses covered 70 then it will stop searching, and from temp it will reply, right?"**
+A: Exactly right, confirmed with numbers. Top-p=0.7 reached its threshold at just 2 candidates (`pizza 50% + pasta 25% = 75%`, crosses 70%), so the shortlist is `[pizza, pasta]` — only 2, even though top-k would have allowed up to 3. Whichever cutoff is satisfied first/is stricter at that moment wins; the other setting's allowance goes unused. Temperature then picks the final word from that 2-item shortlist.
 
 ## Things I got wrong today (kept honest on purpose)
 
