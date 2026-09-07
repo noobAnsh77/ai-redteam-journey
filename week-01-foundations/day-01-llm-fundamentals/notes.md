@@ -64,11 +64,58 @@ A: First part right. Second part slightly too strong — it's not that the whole
 
 - **Context compaction as an attack surface** — if an attacker can influence what survives summarization vs. gets dropped, they might make a model "forget" an earlier safety instruction, or smuggle something malicious into what gets kept. Filed away for Weeks 7-8 (memory/context poisoning).
 
-## Lab (in progress)
+## Lab — done
 
-- [ ] Install Ollama
-- [ ] Pull a local model (llama3.2)
-- [ ] Chat via CLI (`ollama run llama3.2`)
-- [ ] Hit the local API directly (`http://localhost:11434/api/generate`) and inspect real token counts in the response (`eval_count`, `prompt_eval_count`, `total_duration`)
+- [x] Install Ollama
+- [x] Pull a local model (llama3.2)
+- [x] Chat via CLI (`ollama run llama3.2`)
+- [x] Hit the local API directly and inspect real token counts
+- [x] Temperature experiment (temp 0 vs temp 1.2, 5x each)
 
-*(Will update this checklist and add real API output once the Ollama install finishes.)*
+### API call — real output
+
+Prompt: `"Explain what a token is in one sentence."`
+
+```
+response                 : A token is a small, often digital, symbol or representation of value, ownership, or
+                           identity that is used to verify or prove something, such as a user's identity, ownership of
+                           an asset, or participation in a program.
+prompt_eval_count        : 35
+prompt_eval_cached_count : 20
+eval_count               : 47
+total_duration           : 1039747900  (~1.04s)
+prompt_eval_duration     : 302960000   (~303ms)
+eval_duration            : 700190000   (~700ms)
+```
+
+Takeaways from this one response:
+- **`prompt_eval_count` was 35, not ~6** (0.75 × 8 words in my actual prompt). The `context` field starting with `128006, 9125, 128007...` shows why — Ollama wraps every prompt in a hidden chat template (Llama 3's special role/formatting tokens). This scaffolding rides along on every single request, invisible unless you go looking for it, and made up the majority of the token count here.
+- **`prompt_eval_cached_count: 20`** — 20 of those 35 tokens were served from cache instead of recomputed (prompt caching in action — the unchanging template part gets reused across requests).
+- **Generation took longer than reading the prompt** — 700ms to generate 47 tokens vs. 303ms to process 35 input tokens. Generation is consistently the expensive part.
+- **The model answered about the wrong kind of "token"** — it described a crypto/security token (value, ownership, identity), not an LLM tokenization token. "Token" is a genuinely overloaded word, and my prompt gave no disambiguating context — first real lesson in why prompt specificity matters, which becomes directly relevant when crafting injection payloads later.
+
+### Temperature experiment — real output
+
+Same prompt, `"Complete this sentence: The weather today is"`, run 5x at each setting:
+
+**Temperature 0 (all 6 runs, word-for-word identical):**
+```
+sunny with a high of 75 degrees.
+sunny with a high of 75 degrees.
+sunny with a high of 75 degrees.
+sunny with a high of 75 degrees.
+sunny with a high of 75 degrees.
+sunny with a high of 75 degrees.
+```
+
+**Temperature 1.2 (6 runs, all different):**
+```
+...sunny and clear, with a high temperature of 75°F (24°C).
+unpredictable, with a mix of cloudy and sunny skies.
+mostly sunny with a high of 75 degrees and a gentle breeze.
+overcast with a high chance of scattered showers.
+overcast with a chance of scattered showers.
+...partly cloudy with a high of 75°F (24°C) and a gentle breeze.
+```
+
+**Conclusion:** temp 0 = fully deterministic, zero variation across 6 identical calls. Temp 1.2 = different wording, different content, different length every single time from the exact same prompt. Direct, hands-on confirmation of why a red-team finding discovered at high temperature needs to be re-tested multiple times before it counts as a real, reportable result rather than a lucky roll — if I'd found a "successful jailbreak" at temp 1.2 that only worked 2 of 6 tries, testing at temp 0 first would've told me whether the technique itself works at all, independent of randomness.
