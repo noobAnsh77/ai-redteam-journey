@@ -15,6 +15,8 @@ How LLMs actually process text under the hood — tokens, context windows, tempe
 
 **Context compaction** — when a conversation nears the context window limit, instead of hard-cutting old messages, the app summarizes the older part into a condensed version to free up space. (Literally happening in the Claude Code tool I'm using for this project.)
 
+**Why context windows aren't unlimited** — self-attention (the core mechanism in Transformers) makes compute cost grow quadratically with context length: double the tokens, ~4x the compute. Going from 200K to 1 billion tokens isn't 5000x more expensive, it's on the order of tens of millions of times more expensive. Memory (the KV cache holding the model's "working state") also scales with context length. On top of raw cost, longer contexts have a quality problem too — models can quietly under-attend to information buried in the middle of a long context ("lost in the middle"), so a bigger window is neither cheap nor automatically more reliable.
+
 ## Questions I asked today (kept in my own words, for the record)
 
 Keeping the actual questions, not just the polished answers — the confusion itself is part of the learning record.
@@ -36,6 +38,15 @@ A: Same conversion, just applied to text you don't see — the hidden reasoning 
 
 **Q: "you mention 1 token = 0.75 english word ok? so 'how are you' = 3 word ok, what if i type 'howareyou' = so ai will think 1 word? so bill will be less"**
 A: Wrong direction — tokenizers don't count words, they match against common chunks learned from training data. `"how are you"` is common and tokenizes efficiently (~1 token/word). `"howareyou"` is a rare string with no clean vocabulary match, so it often gets split into *more*, smaller pieces — same or higher token count, not lower. (Separately, note: removing spaces/leetspeak *can* still help bypass a keyword filter — that's a different goal than saving cost, covered below.)
+
+**Q: "in claude i can see context 200k means if its full then before getting full claude will delete old thing and before deleting it will keep the thing in short summary to help in new chat right?"**
+A: Yes, that's context compaction, correctly described — and it kicks in as the conversation *approaches* the limit, not only once totally full, to leave room for the summary plus new messages. Whether this happens automatically depends on the specific product though — some apps do smart summarization, some just truncate the oldest messages with no summary at all, some just tell you to start a new chat. The concept is universal; the implementation varies.
+
+**Q: "if its have 200k why not make it 1 billion or anything and how its fill?"**
+A: Two separate reasons it's not just "make the number bigger": (1) **Cost** — self-attention (how Transformers work) makes compute grow quadratically with context length, so going from 200K to 1 billion tokens (~5000x more) would be roughly 25 million times more compute for attention alone, plus proportionally more GPU memory just to hold the conversation's working state (KV cache). (2) **Reliability, not just capacity** — even models with huge context windows can quietly under-attend to information buried in the middle of a long context ("lost in the middle"), so a bigger window doesn't guarantee the model will actually notice/use everything in it. "How it fills": cumulative within one session — system prompt + every prior turn + any RAG chunks + current message, added up turn by turn until it approaches the ceiling.
+
+**Q: "so you mean if context window increase from 200k to 1 billion it will add the gpu cost and if all have huge window if anything miss in middle whole convo will be ruin?"**
+A: First part right. Second part slightly too strong — it's not that the whole conversation breaks, it's a quieter failure: the model still processes everything, but may silently under-weigh something buried in the middle even though it's technically "in" the context window. Example: a 100-page contract pasted in, model misses a clause on page 50, gives a confidently wrong answer — not a crash, just a reliability gap. This is exactly why "context stuffing" is a real attack technique: burying a malicious instruction in the middle of a long boring document to get it processed with less scrutiny than content near the edges.
 
 ## Things I got wrong today (kept honest on purpose)
 
