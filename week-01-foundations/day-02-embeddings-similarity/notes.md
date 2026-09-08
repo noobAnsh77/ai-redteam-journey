@@ -40,10 +40,38 @@ A: Seven practices, each one a defense against a specific attack covered later i
 - **Missing access control on retrieval = cross-tenant leakage** — one of the most realistic, high-impact RAG findings: User A's query surfaces User B's private documents because retrieval never checked permissions, only searched the whole store blindly.
 - **Retrieved content treated as instructions instead of data = indirect prompt injection surface** — if the app doesn't structurally separate "developer instructions" from "retrieved reference text," a malicious instruction planted inside a document can get obeyed just because it showed up in the context window.
 
-## Lab
+## Lab — done
 
-- [ ] Pull an embedding model (`ollama pull nomic-embed-text`)
-- [ ] Write a plain Python + numpy script (no LangChain/frameworks) — embed 5-6 sentences, compute cosine similarity between them by hand
-- [ ] Confirm similar-meaning sentences score high, unrelated ones score low
+- [x] Pull an embedding model (`ollama pull nomic-embed-text`, 768 dimensions)
+- [x] Write a plain Python + numpy script (`similarity_lab.py` in this folder) — no LangChain/frameworks, cosine similarity implemented directly from the formula (dot product / product of magnitudes)
+- [x] Confirm similar-meaning sentences score high, unrelated ones score low
 
-*(To be completed and updated with real output.)*
+### Real output
+
+Sentences (3 topic pairs on purpose — dogs, finance, weather):
+```
+[0] I love dogs
+[1] I adore puppies
+[2] The stock market crashed today
+[3] Financial markets took a huge hit
+[4] I like sunny weather
+[5] The weather today is bright and sunny
+```
+
+Cosine similarity matrix:
+```
+         0       1       2       3       4       5
+[0]  1.000   0.830   0.379   0.402   0.499   0.463
+[1]  0.830   1.000   0.357   0.370   0.488   0.467
+[2]  0.379   0.357   1.000   0.686   0.376   0.588
+[3]  0.402   0.370   0.686   1.000   0.373   0.473
+[4]  0.499   0.488   0.376   0.373   1.000   0.780
+[5]  0.463   0.467   0.588   0.473   0.780   1.000
+```
+
+### Takeaways from real data
+
+- **Clusters confirmed**: same-topic pairs (dogs 0.830, finance 0.686, weather 0.780) all scored clearly higher than cross-topic pairs (mostly 0.35-0.5). Theory matched real output.
+- **Cross-topic scores aren't near zero** — sitting around 0.35-0.5, not near 0, because any two English sentences share some baseline structural similarity (grammar, common words). This means a RAG relevance threshold can't be a universal number like "0.7 = good, 0.3 = bad" — it has to be calibrated against this specific embedding model's own baseline, otherwise a too-low threshold lets irrelevant content through constantly.
+- **Same-topic strength isn't uniform** — dogs (0.830) and weather (0.780) scored notably higher than finance (0.686), because "I love dogs"/"I adore puppies" share tighter wording than "The stock market crashed today"/"Financial markets took a huge hit," which mean the same thing but use different vocabulary. Similarity tracks phrasing closeness too, not just topic.
+- **One unexpected result**: finance vs. weather `[2,5]` = 0.588, higher than other cross-topic pairs (e.g. dogs vs. finance `[0,2]` = 0.379) — likely incidental structural overlap ("today," conditions-changing phrasing), not real semantic relation. Concrete reminder that embeddings pick up on superficial patterns too, not pure meaning — this is exactly the kind of imperfect similarity space that makes RAG poisoning possible later (Weeks 5-6): a malicious document doesn't need to be a strong topical match, just close enough in this fuzzy space to get retrieved.
