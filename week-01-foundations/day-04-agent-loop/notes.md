@@ -121,6 +121,8 @@ A: Five reasons "just use tools for everything" breaks:
 
 - **Agent decision to stop calling tools is non-deterministic** — the LLM autonomously decides when it has "enough" info. This can be manipulated: feed it partial results that seem complete → it stops early → answer is wrong in a predictable way the attacker controls.
 
+- **Tool hijacking / parameter injection (to practice in Weeks 7-8)** — attacker tricks the agent into calling a tool with attacker-controlled parameters (e.g. send_email tool called with attacker's address instead of user's), or in some cases into calling a completely different tool than the developer intended. Root cause: the LLM decides which tool to call and what parameters to pass based on text in its context — if that text is attacker-controlled (via injection), tool selection and parameters can be manipulated. In a chatbot this is impossible (no tools). In an agent with real tools like send_email, delete_file, query_db, the consequences are real-world actions. Question raised on Day 9: "can we manipulate the AI to use our tool instead of the dev's?" — yes, this is exactly that attack.
+
 ## Lab — done
 
 Script: `agent_lab.py` — plain Python + urllib + Ollama `/api/chat` with native tool calling. No LangChain.
