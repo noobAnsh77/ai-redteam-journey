@@ -10,3 +10,4 @@ Goal: understand how LLMs, RAG, and agents actually work under the hood — toke
 - [Day 4 — Agent Loop: ReAct Pattern, Tools, and Attack Surface](day-04-agent-loop/notes.md)
 - [Day 5 — MCP Basics: Protocol, Architecture, and Tool Poisoning](day-05-mcp-basics/notes.md)
 - [Day 6 — Agent Memory Types: Short/Long-term, Poisoning, Cross-user Leakage](day-06-agent-memory/notes.md)
+- [Day 7 — Week 1 Recap: Full Stack Picture, Attack Surface Map, Week 2 Preview](day-07-week1-recap/notes.md)
