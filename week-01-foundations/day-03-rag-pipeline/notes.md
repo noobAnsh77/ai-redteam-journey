@@ -75,6 +75,28 @@ Time to embed 1,700 chunks locally: ~10-15 minutes one-time. Production speeds t
 
 A: Almost exactly right, one correction: the user's question is never chunked. Only documents get chunked during indexing. The user's question gets embedded as a single whole unit, used as the search query. The retrieved chunk text (which was already chunked during indexing) + the original user question together get sent to the LLM. So yes — top-k/top-p from Day 1 applies at the generation step, and cosine similarity from Day 2 is the retrieval step. Everything connects.
 
+**Q: "grounding instruction means — chatbot is for healthcare, user asks something out of context, it replies 'I don't have information for this' right?"**
+
+A: Exactly right. The grounding instruction is just one line in the prompt: "only answer from the context I give you — if nothing relevant is there, say you don't know." For a healthcare chatbot, if the user asks about cooking or maths, Chroma still retrieves the closest healthcare chunks, the LLM sees the mismatch between question and context, and follows the grounding instruction to say "I don't have information on this." One line of text in the prompt = the entire behavior change.
+
+**Q: "in this lab, did we push the RAG documents to llama3.2 or not? what exactly did we build?"**
+
+A: We did NOT push documents to llama3.2 — it never learned from them. Here's exactly what happened:
+
+```
+INDEXING (one-time):
+  7 paragraphs → nomic-embed-text (via Ollama) → 7 vectors → stored in Chroma
+  llama3.2 was not involved at all in this step
+
+QUERY (per user question):
+  User query → nomic-embed-text → query vector
+             → Chroma finds top-2 closest stored vectors → returns matching TEXT
+             → that text gets dropped into a prompt alongside the user's question
+             → llama3.2 reads both and generates an answer
+```
+
+llama3.2 received the document text as plain text inside a prompt at the moment of answering — same as if you copy-pasted a paragraph into ChatGPT and said "answer based on this." It was not trained on, fine-tuned with, or permanently updated with our documents. This is the core RAG principle from Day 2: documents fed at runtime as context, not baked into weights.
+
 ## Security angles worth remembering
 
 - **Vector DB has no native access control** — by default it finds the nearest vectors across everything stored, with no concept of who owns which document. A multi-tenant app storing all customers' documents in one collection without metadata filtering = User A's query retrieves User B's private documents. This is the cross-tenant data leakage attack (Weeks 5-6).
@@ -85,10 +107,50 @@ A: Almost exactly right, one correction: the user's question is never chunked. O
 
 - **Approximate search = fuzzy attack surface** — because ANN search is approximate and picks up surface-level patterns (we saw this in Day 2: finance vs. weather scored 0.588 due to incidental word overlap), a malicious document doesn't need to be a strong topical match to get retrieved — just close enough in the embedding space.
 
-## Lab — upcoming
+## Lab — done
 
-- [ ] Build end-to-end RAG pipeline: Chroma vector DB + LangChain + actual retrieval + generation
-- [ ] Index a small document set
-- [ ] Test with relevant and irrelevant queries
-- [ ] Confirm retrieval + grounded generation works
-- [ ] Test what happens with no-match queries (naive vs. threshold behaviour)
+Script: `rag_lab.py` — plain Python + chromadb + urllib, no frameworks.
+
+- [x] 7 document paragraphs across 3 topics (healthcare, space, cooking)
+- [x] Embedded all 7 via `nomic-embed-text` → stored in Chroma (in-memory)
+- [x] Tested 3 queries: 2 relevant, 1 off-topic
+- [x] Grounded prompt with "only answer from context" instruction
+
+### Real output
+
+```
+STEP 1 — Indexing documents into Chroma
+Embedding 7 documents via Ollama (nomic-embed-text)...
+Done. 7 chunks stored in Chroma.
+
+QUERY: What are the symptoms of diabetes?
+RETRIEVED CHUNKS:
+  [1] Diabetes is a chronic disease that occurs when the pancreas does not produce enough insulin. Common symptoms i...
+  [2] Hypertension, or high blood pressure, is a condition where the force of blood against artery walls is consiste...
+GENERATED ANSWER:
+  Frequent urination, excessive thirst, and blurry vision.
+
+QUERY: Tell me about the James Webb telescope
+RETRIEVED CHUNKS:
+  [1] The James Webb Space Telescope is the most powerful space telescope ever built. It observes the universe in in...
+  [2] Mars has two small moons named Phobos and Deimos. Scientists believe they are captured asteroids...
+GENERATED ANSWER:
+  The James Webb Space Telescope is the most powerful space telescope ever built. It observes the
+  universe in infrared light, allowing it to see through dust clouds and observe the earliest
+  galaxies formed after the Big Bang.
+
+QUERY: What is 2 + 2?
+RETRIEVED CHUNKS:
+  [1] Diabetes is a chronic disease...   ← healthcare returned for a maths question
+  [2] Hypertension, or high blood pressure...
+GENERATED ANSWER:
+  I don't have information on this in my knowledge base.
+```
+
+### Takeaways from real output
+
+- **Relevant queries worked perfectly** — Chroma retrieved the correct topic chunks both times; LLM answered using only the retrieved text, didn't add anything from training.
+- **Off-topic query ("2+2") — Chroma returned healthcare chunks** (closest available, not actually relevant) — confirms the vector DB is blind to intent and always returns *something*.
+- **Grounding instruction worked** — LLM knew 2+2=4 from training but still said "I don't have information on this" because the retrieved context was irrelevant and the grounding instruction told it to defer. One line in the prompt changed the entire behaviour.
+- **LLM never learned from our documents** — nomic-embed-text handled embeddings, Chroma stored vectors, llama3.2 only ever received the chunk text as plain text in a prompt at query time. RAG = runtime context injection, not training.
+- **Security preview**: replace "What is 2+2?" with "Ignore previous instructions..." — that injection attempt gets embedded, Chroma returns healthcare chunks, both the malicious instruction AND the context land in llama3.2's prompt together. Grounding instruction helps but doesn't fully block it. That's the indirect prompt injection surface (Weeks 2-3).
