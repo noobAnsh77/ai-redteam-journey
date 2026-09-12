@@ -8,3 +8,4 @@ Goal: understand how LLMs, RAG, and agents actually work under the hood — toke
 - [Day 2 — Embeddings & Similarity Search](day-02-embeddings-similarity/notes.md)
 - [Day 3 — RAG Pipeline: Chunking, Vector DB, Retrieval & Generation](day-03-rag-pipeline/notes.md)
 - [Day 4 — Agent Loop: ReAct Pattern, Tools, and Attack Surface](day-04-agent-loop/notes.md)
+- [Day 5 — MCP Basics: Protocol, Architecture, and Tool Poisoning](day-05-mcp-basics/notes.md)
