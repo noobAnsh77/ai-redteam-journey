@@ -6,3 +6,4 @@ Goal: understand how LLMs, RAG, and agents actually work under the hood — toke
 
 - [Day 1 — LLM Fundamentals: Tokens, Context, and Cost](day-01-llm-fundamentals/notes.md)
 - [Day 2 — Embeddings & Similarity Search](day-02-embeddings-similarity/notes.md)
+- [Day 3 — RAG Pipeline: Chunking, Vector DB, Retrieval & Generation](day-03-rag-pipeline/notes.md)
