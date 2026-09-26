@@ -8,6 +8,7 @@ Goal: understand prompt injection (direct and indirect), system prompt extractio
 - [Day 9 — Indirect Prompt Injection: RAG Pipeline Poisoning Lab](day-09-indirect-injection/notes.md)
 - [Day 10 — Agent Breaker (Lakera): Real Target System Prompt Extraction](day-10-agent-breaker/notes.md)
 - [Day 11 — PortSwigger Web LLM Labs: Excessive Agency, API Injection, Indirect Injection, XSS](day-11-portswigger-llm/notes.md)
+- [Day 12 — Agent Breaker: PortfolioIQ Advisor — All 3 Levels Solved (100/100 each)](day-12-agent-breaker/notes.md)
 
 ## Payload References
 
